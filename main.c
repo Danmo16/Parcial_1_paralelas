@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <omp.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -80,36 +81,51 @@ void guardarImagen(int *imagen, int width, int height) {
     fclose(archivo);
 }
 
-
+//aplicación de la paralelización
 void aplicarFiltro(int *imagen, int *imagenProcesada, int width, int height) {
-    int Gx[3][3] = {{-1, 0, 1}, {-2, 0, 2}, {-1, 0, 1}};
-    int Gy[3][3] = {{-1, -2, -1}, {0, 0, 0}, {1, 2, 1}};
+    int Gx[3][3]={{-1,0,1},{-2,0,2},{-1,0,1}};
+    int Gy[3][3]={{-1,-2,-1},{0,0,0},{1,2,1}};
 
-    for (int y = 1; y < height - 1; y++) {
-        for (int x = 1; x < width - 1; x++) {
+    //se paraleliza el bucle
+    #pragma omp parallel for //Uso de pragma omp
+    for (int y = 1; y < height-1; y++){
+        for (int x = 1; x < width; x++){
             int sumX = 0;
             int sumY = 0;
 
-            // Aplicar máscaras de Sobel (Gx y Gy)
-            for (int ky = -1; ky <= 1; ky++) {
-                for (int kx = -1; kx <= 1; kx++) {
-                    sumX += imagen[(y + ky) * width + (x + kx)] * Gx[ky + 1][kx + 1];
-                    sumY += imagen[(y + ky) * width + (x + kx)] * Gy[ky + 1][kx + 1];
+            //aplicar máscaras de Sobel (Gx y Gy)
+            for (int ky = -1; ky <= 1; ky++){
+                for (int kx = -1; kx <= 1; kx++){
+                    sumX += imagen[(y+ky)* width + (x+kx)] * Gx[ky+1][kx+1];
+                    sumY += imagen[(y+ky)* width + (x+kx)] * Gy[ky+1][kx+1];    
                 }
-            }
+            } 
 
-            // Calcular magnitud del gradiente
+            //Calcular magnitud del gradiente  
             int magnitude = abs(sumX) + abs(sumY);
-            imagenProcesada[y * width + x] = (magnitude > 255) ? 255 : magnitude;  // Normalizar a 8 bits
+            imagenProcesada[y*width +x] =(magnitude>255)? 255: magnitude;   
         }
     }
 }
 
+// Función para calcular la suma de los píxeles en una imagen usando paralelización
 int calcularSumaPixeles(int *imagen, int width, int height) {
     int suma = 0;
-    for (int i = 0; i < width * height; i++) {
-        suma += imagen[i];
+
+    // Inicia la región paralela
+    #pragma omp parallel //Uso de omp
+    {
+        int suma_local = 0;
+
+        // Distribuir el bucle entre los hilos
+        #pragma omp for //Uso de omp
+        for (int i = 0; i < width * height; i++) {
+        suma_local += imagen[i];
+        }
+
+        // Uso de atomic para sumar las sumas parciales a la suma total
+        #pragma omp atomic //Uso de omp
+        suma += suma_local;
     }
     return suma;
 }
-
